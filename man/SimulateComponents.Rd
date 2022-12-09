@@ -22,14 +22,13 @@ SimulateComponents(
 )
 }
 \arguments{
-\item{n}{number of observations in the simulated data.}
+\item{n}{number of observations in the simulated dataset.}
 
-\item{pk}{vector of the number of variables per group in the simulated data.
-The number of nodes in the simulated graph is \code{sum(pk)}. With multiple
-groups, the simulated (partial) correlation matrix has a block structure,
-where blocks arise from the integration of the \code{length(pk)} groups.
-This argument is only used if \code{sum(pk)} is equal to the number of
-rows/columns in \code{theta} is not provided.}
+\item{pk}{vector of the number of variables per group in the simulated
+dataset. The number of nodes in the simulated graph is \code{sum(pk)}. With
+multiple groups, the simulated (partial) correlation matrix has a block
+structure, where blocks arise from the integration of the \code{length(pk)}
+groups. This argument is only used if \code{theta} is not provided.}
 
 \item{adjacency}{optional binary and symmetric adjacency matrix encoding the
 conditional graph structure between observations. The clusters encoded in
@@ -38,12 +37,13 @@ off-diagonal blocks are not allowed to ensure that the simulated orthogonal
 components are sparse. Corresponding entries in the precision matrix will
 be set to zero.}
 
-\item{nu_within}{expected density (number of edges over the number of node
-pairs) of within-group blocks in the graph. If \code{length(pk)=1}, this is
+\item{nu_within}{probability of having an edge between two nodes belonging to
+the same group, as defined in \code{pk}. If \code{length(pk)=1}, this is
 the expected density of the graph. If \code{implementation=HugeAdjacency},
 this argument is only used for \code{topology="random"} or
 \code{topology="cluster"} (see argument \code{prob} in
-\code{\link[huge]{huge.generator}}).}
+\code{\link[huge]{huge.generator}}). Only used if \code{nu_mat} is not
+provided.}
 
 \item{v_within}{vector defining the (range of) nonzero entries in the
 diagonal blocks of the precision matrix. These values must be between -1
@@ -60,9 +60,9 @@ negative partial correlations.}
 \item{continuous}{logical indicating whether to sample precision values from
 a uniform distribution between the minimum and maximum values in
 \code{v_within} (diagonal blocks) or \code{v_between} (off-diagonal blocks)
-(\code{continuous=TRUE}) or from proposed values in \code{v_within}
-(diagonal blocks) or \code{v_between} (off-diagonal blocks)
-(\code{continuous=FALSE}).}
+(if \code{continuous=TRUE}) or from proposed values in \code{v_within}
+(diagonal blocks) or \code{v_between} (off-diagonal blocks) (if
+\code{continuous=FALSE}).}
 
 \item{pd_strategy}{method to ensure that the generated precision matrix is
 positive definite (and hence can be a covariance matrix). If
@@ -92,8 +92,9 @@ explore for constant u.}
 \item{tol}{accuracy for the search of parameter u as defined in
 \code{\link[stats]{optimise}}.}
 
-\item{scale}{logical indicating if the simulated data should be standardised
-using \code{\link[base]{scale}}.}
+\item{scale}{logical indicating if the true mean is zero and true variance is
+one for all simulated variables. The observed mean and variance may be
+slightly off by chance.}
 
 \item{output_matrices}{logical indicating if the true precision and (partial)
 correlation matrices should be included in the output.}
@@ -132,6 +133,7 @@ The data is simulated from a centered multivariate Normal
   observations and is equal to \code{sum(pk)}.
 }
 \examples{
+\donttest{
 # Simulation of 3 components with high e.v.
 set.seed(1)
 simul <- SimulateComponents(pk = c(5, 3, 4), ev_xx = 0.4)
@@ -155,6 +157,7 @@ simul <- SimulateComponents(
 plot(simul)
 plot(cumsum(simul$ev), ylim = c(0, 1), las = 1)
 }
+}
 \references{
 \insertRef{ourstabilityselection}{fake}
 }
@@ -163,6 +166,8 @@ plot(cumsum(simul$ev), ylim = c(0, 1), las = 1)
 
 Other simulation functions: 
 \code{\link{SimulateAdjacency}()},
+\code{\link{SimulateClustering}()},
+\code{\link{SimulateCorrelation}()},
 \code{\link{SimulateGraphical}()},
 \code{\link{SimulateRegression}()}
 }

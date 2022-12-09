@@ -2,13 +2,12 @@
 #'
 #' Simulates data from a Gaussian Graphical Model (GGM).
 #'
-#' @param n number of observations in the simulated data.
-#' @param pk vector of the number of variables per group in the simulated data.
-#'   The number of nodes in the simulated graph is \code{sum(pk)}. With multiple
-#'   groups, the simulated (partial) correlation matrix has a block structure,
-#'   where blocks arise from the integration of the \code{length(pk)} groups.
-#'   This argument is only used if \code{sum(pk)} is equal to the number of
-#'   rows/columns in \code{theta} is not provided.
+#' @param n number of observations in the simulated dataset.
+#' @param pk vector of the number of variables per group in the simulated
+#'   dataset. The number of nodes in the simulated graph is \code{sum(pk)}. With
+#'   multiple groups, the simulated (partial) correlation matrix has a block
+#'   structure, where blocks arise from the integration of the \code{length(pk)}
+#'   groups. This argument is only used if \code{theta} is not provided.
 #' @param theta optional binary and symmetric adjacency matrix encoding the
 #'   conditional independence structure.
 #' @param implementation function for simulation of the graph. By default,
@@ -22,16 +21,20 @@
 #'   \code{implementation=HugeAdjacency}, possible values are listed for the
 #'   argument \code{graph} of \code{\link[huge]{huge.generator}}. These are:
 #'   "random", "hub", "cluster", "band" and "scale-free".
-#' @param nu_within expected density (number of edges over the number of node
-#'   pairs) of within-group blocks in the graph. If \code{length(pk)=1}, this is
+#' @param nu_within probability of having an edge between two nodes belonging to
+#'   the same group, as defined in \code{pk}. If \code{length(pk)=1}, this is
 #'   the expected density of the graph. If \code{implementation=HugeAdjacency},
 #'   this argument is only used for \code{topology="random"} or
 #'   \code{topology="cluster"} (see argument \code{prob} in
-#'   \code{\link[huge]{huge.generator}}).
-#' @param nu_between expected density (number of edges over the number of node
-#'   pairs) of between-group blocks in the graph. Similar to \code{nu_within}.
-#'   By default, the same density is used for within and between blocks
-#'   (\code{nu_within}=\code{nu_between}). Only used if \code{length(pk)>1}.
+#'   \code{\link[huge]{huge.generator}}). Only used if \code{nu_mat} is not
+#'   provided.
+#' @param nu_between probability of having an edge between two nodes belonging
+#'   to different groups, as defined in \code{pk}. By default, the same density
+#'   is used for within and between blocks (\code{nu_within}=\code{nu_between}).
+#'   Only used if \code{length(pk)>1}. Only used if \code{nu_mat} is not
+#'   provided.
+#' @param nu_mat matrix of probabilities of having an edge between nodes
+#'   belonging to a given pair of node groups defined in \code{pk}.
 #' @param output_matrices logical indicating if the true precision and (partial)
 #'   correlation matrices should be included in the output.
 #' @param v_within vector defining the (range of) nonzero entries in the
@@ -51,9 +54,9 @@
 #' @param continuous logical indicating whether to sample precision values from
 #'   a uniform distribution between the minimum and maximum values in
 #'   \code{v_within} (diagonal blocks) or \code{v_between} (off-diagonal blocks)
-#'   (\code{continuous=TRUE}) or from proposed values in \code{v_within}
-#'   (diagonal blocks) or \code{v_between} (off-diagonal blocks)
-#'   (\code{continuous=FALSE}).
+#'   (if \code{continuous=TRUE}) or from proposed values in \code{v_within}
+#'   (diagonal blocks) or \code{v_between} (off-diagonal blocks) (if
+#'   \code{continuous=FALSE}).
 #' @param pd_strategy method to ensure that the generated precision matrix is
 #'   positive definite (and hence can be a covariance matrix). If
 #'   \code{pd_strategy="diagonally_dominant"}, the precision matrix is made
@@ -77,22 +80,22 @@
 #'   explore for constant u.
 #' @param tol accuracy for the search of parameter u as defined in
 #'   \code{\link[stats]{optimise}}.
-#' @param scale logical indicating if the simulated data should be standardised
-#'   using \code{\link[base]{scale}}.
+#' @param scale logical indicating if the true mean is zero and true variance is
+#'   one for all simulated variables. The observed mean and variance may be
+#'   slightly off by chance.
 #' @param ... additional arguments passed to the graph simulation function
 #'   provided in \code{implementation}.
 #'
-#' @seealso \code{\link{SimulatePrecision}}, \code{\link{MakePositiveDefinite}},
-#'   \code{\link{Contrast}}
+#' @seealso \code{\link{SimulatePrecision}}, \code{\link{MakePositiveDefinite}}
 #'
 #' @family simulation functions
 #'
 #' @return A list with: \item{data}{simulated data with \code{n} observation and
 #'   \code{sum(pk)} variables.} \item{theta}{adjacency matrix of the simulated
-#'   graph} \item{omega}{simulated (true) precision matrix. Only returned if
+#'   graph.} \item{omega}{simulated (true) precision matrix. Only returned if
 #'   \code{output_matrices=TRUE}.} \item{phi}{simulated (true) partial
 #'   correlation matrix. Only returned if \code{output_matrices=TRUE}.}
-#'   \item{sigma}{ simulated (true) covariance matrix. Only returned if
+#'   \item{sigma}{simulated (true) covariance matrix. Only returned if
 #'   \code{output_matrices=TRUE}.} \item{u}{value of the constant u used for the
 #'   simulation of \code{omega}. Only returned if \code{output_matrices=TRUE}.}
 #'
@@ -117,6 +120,9 @@
 #' @references \insertRef{ourstabilityselection}{fake}
 #'
 #' @examples
+#' oldpar <- par(no.readonly = TRUE)
+#' par(mar = rep(7, 4))
+#'
 #' # Simulation of random graph with 50 nodes
 #' set.seed(1)
 #' simul <- SimulateGraphical(n = 100, pk = 50, topology = "random", nu_within = 0.05)
@@ -194,10 +200,13 @@
 #'   col = c("darkblue", "white", "firebrick3"),
 #'   legend_range = c(-1, 1), legend_length = 50, legend = FALSE
 #' )
+#'
+#' par(oldpar)
+#'
 #' @export
 SimulateGraphical <- function(n = 100, pk = 10, theta = NULL,
                               implementation = HugeAdjacency, topology = "random",
-                              nu_within = 0.1, nu_between = NULL,
+                              nu_within = 0.1, nu_between = NULL, nu_mat = NULL,
                               v_within = c(0.5, 1), v_between = c(0.1, 0.2),
                               v_sign = c(-1, 1), continuous = TRUE,
                               pd_strategy = "diagonally_dominant", ev_xx = NULL, scale_ev = TRUE,
@@ -221,7 +230,7 @@ SimulateGraphical <- function(n = 100, pk = 10, theta = NULL,
     theta <- SimulateAdjacency(
       pk = pk,
       implementation = implementation, topology = topology,
-      nu_within = nu_within, nu_between = nu_between, ...
+      nu_within = nu_within, nu_between = nu_between, nu_mat = nu_mat, ...
     )
   }
 
@@ -264,6 +273,139 @@ SimulateGraphical <- function(n = 100, pk = 10, theta = NULL,
 
   # Defining the class
   class(out) <- "simulation_graphical_model"
+
+  return(out)
+}
+
+
+#' Simulation of a correlation matrix
+#'
+#' Simulates a correlation matrix. This is done in three steps with (i) the
+#' simulation of an undirected graph encoding conditional independence, (ii) the
+#' simulation of a (positive definite) precision matrix given the graph, and
+#' (iii) the re-scaling of the inverse of the precision matrix.
+#'
+#' @inheritParams SimulateGraphical
+#'
+#' @details In Step 1, the conditional independence structure between the
+#'   variables is simulated. This is done using \code{\link{SimulateAdjacency}}.
+#'
+#'   In Step 2, the precision matrix is simulated using
+#'   \code{\link{SimulatePrecision}} so that (i) its nonzero entries correspond
+#'   to edges in the graph simulated in Step 1, and (ii) it is positive definite
+#'   (see \code{\link{MakePositiveDefinite}}).
+#'
+#'   In Step 3, the covariance is calculated as the inverse of the precision
+#'   matrix. The correlation matrix is then obtained by re-scaling the
+#'   covariance matrix (see \code{\link[stats]{cov2cor}}).
+#'
+#' @family simulation functions
+#'
+#' @seealso \code{\link{SimulatePrecision}}, \code{\link{MakePositiveDefinite}}
+#'
+#' @return A list with: \item{sigma}{simulated correlation matrix.}
+#'   \item{omega}{simulated precision matrix. Only returned if
+#'   \code{output_matrices=TRUE}.} \item{theta}{adjacency matrix of the
+#'   simulated graph. Only returned if \code{output_matrices=TRUE}.}
+#'
+#' @examples
+#' oldpar <- par(no.readonly = TRUE)
+#' par(mar = rep(7, 4))
+#'
+#' # Random correlation matrix
+#' set.seed(1)
+#' simul <- SimulateCorrelation(pk = 10)
+#' Heatmap(simul$sigma,
+#'   col = c("navy", "white", "darkred"),
+#'   text = TRUE, format = "f", digits = 2,
+#'   legend_range = c(-1, 1)
+#' )
+#'
+#' # Correlation matrix with homogeneous block structure
+#' set.seed(1)
+#' simul <- SimulateCorrelation(
+#'   pk = c(5, 5),
+#'   nu_within = 1,
+#'   nu_between = 0,
+#'   v_sign = -1,
+#'   v_within = 1
+#' )
+#' Heatmap(simul$sigma,
+#'   col = c("navy", "white", "darkred"),
+#'   text = TRUE, format = "f", digits = 2,
+#'   legend_range = c(-1, 1)
+#' )
+#'
+#' # Correlation matrix with heterogeneous block structure
+#' set.seed(1)
+#' simul <- SimulateCorrelation(
+#'   pk = c(5, 5),
+#'   nu_within = 0.5,
+#'   nu_between = 0,
+#'   v_sign = -1
+#' )
+#' Heatmap(simul$sigma,
+#'   col = c("navy", "white", "darkred"),
+#'   text = TRUE, format = "f", digits = 2,
+#'   legend_range = c(-1, 1)
+#' )
+#'
+#' par(oldpar)
+#'
+#' @export
+SimulateCorrelation <- function(pk = 10, theta = NULL,
+                                implementation = HugeAdjacency, topology = "random",
+                                nu_within = 0.1, nu_between = NULL, nu_mat = NULL,
+                                v_within = c(0.5, 1), v_between = c(0.1, 0.2),
+                                v_sign = c(-1, 1), continuous = TRUE,
+                                pd_strategy = "diagonally_dominant", ev_xx = NULL, scale_ev = TRUE,
+                                u_list = c(1e-10, 1), tol = .Machine$double.eps^0.25,
+                                output_matrices = FALSE, ...) {
+  # Defining number of nodes
+  p <- sum(pk)
+  if (!is.null(theta)) {
+    if (ncol(theta) != p) {
+      p <- pk <- ncol(theta)
+    }
+  }
+
+  # Defining the between-block density
+  if (is.null(nu_between)) {
+    nu_between <- nu_within
+  }
+
+  # Building adjacency matrix
+  if (is.null(theta)) {
+    theta <- SimulateAdjacency(
+      pk = pk,
+      implementation = implementation, topology = topology,
+      nu_within = nu_within, nu_between = nu_between, nu_mat = nu_mat, ...
+    )
+  }
+
+  # Simulation of a precision matrix
+  out <- SimulatePrecision(
+    pk = pk, theta = theta,
+    v_within = v_within, v_between = v_between,
+    v_sign = v_sign, continuous = continuous,
+    pd_strategy = pd_strategy, ev_xx = ev_xx, scale = scale_ev,
+    u_list = u_list, tol = tol
+  )
+  omega <- out$omega
+
+  # Computing the correlation matrix
+  sigma <- stats::cov2cor(solve(omega))
+
+  # Preparing the output
+  if (output_matrices) {
+    out <- list(
+      sigma = sigma,
+      omega = omega,
+      theta = theta
+    )
+  } else {
+    out <- list(sigma = sigma)
+  }
 
   return(out)
 }
@@ -316,6 +458,7 @@ SimulateGraphical <- function(n = 100, pk = 10, theta = NULL,
 #' @references \insertRef{ourstabilityselection}{fake}
 #'
 #' @examples
+#' \donttest{
 #' # Simulation of 3 components with high e.v.
 #' set.seed(1)
 #' simul <- SimulateComponents(pk = c(5, 3, 4), ev_xx = 0.4)
@@ -338,6 +481,7 @@ SimulateGraphical <- function(n = 100, pk = 10, theta = NULL,
 #' )
 #' plot(simul)
 #' plot(cumsum(simul$ev), ylim = c(0, 1), las = 1)
+#' }
 #' @export
 SimulateComponents <- function(n = 100, pk = c(10, 10),
                                adjacency = NULL, nu_within = 1,
@@ -404,397 +548,537 @@ SimulateComponents <- function(n = 100, pk = c(10, 10),
 #' Simulates data with outcome(s) and predictors, where only a subset of the
 #' predictors actually contributes to the definition of the outcome(s).
 #'
-#' @inheritParams SimulateGraphical
-#' @param pk vector with the number of predictors in each independent block of
-#'   variables in \code{xdata}. The number of independent blocks, which
-#'   determines the maximum number of orthogonal latent variables that can be
-#'   simulated, is given by \code{length(pk)}.
-#' @param family type of outcome. If \code{family="gaussian"}, normally
-#'   distributed outcomes are simulated. If \code{family="binomial"} or
-#'   \code{family="multinomial"}, binary outcome(s) are simulated from a
-#'   multinomial distribution where the probability is defined from a linear
-#'   combination of normally distributed outcomes.
-#' @param N number of classes of the categorical outcome. Only used if
-#'   \code{family="multinomial"}.
-#' @param ev_xz vector of the expected proportions of explained variances for
-#'   each of the orthogonal latent variables. It must contain values in ]0,1[,
-#'   and must be a vector of length \code{length(pk)} or a single value to
-#'   generate latent variables with the same expected proportion of explained
-#'   variance.
-#' @param adjacency_x optional matrix encoding the conditional independence
-#'   structure between predictor variables in \code{xdata}. This argument must
-#'   be a binary symmetric matrix of size \code{sum(pk)} with zeros on the
-#'   diagonal.
-#' @param nu_within expected density (number of edges over the number of node
-#'   pairs) of the conditional independence graph in the within-group blocks for
-#'   predictors. For independent predictors, use \code{nu_within=0}. This
-#'   argument is only used if \code{adjancency_x} is not provided.
-#' @param theta_xz optional binary matrix encoding the predictor variables from
-#'   \code{xdata} (columns) contributing to the definition of the orthogonal
-#'   latent outcomes from \code{zdata} (rows).
-#' @param nu_xz expected proportion of relevant predictors over the total number
-#'   of predictors to be used for the simulation of the orthogonal latent
-#'   outcomes. This argument is only used if \code{theta_xz} is not provided.
-#' @param theta_zy optional binary matrix encoding the latent variables from
-#'   \code{zdata} (columns) contributing to the definition of the observed
-#'   outcomes from \code{ydata} (rows). This argument must be a square matrix of
-#'   size \code{length(pk)}. If \code{theta_zy} is a diagonal matrix, each
-#'   latent variable contributes to the definition of one observed outcome so
-#'   that there is a one-to-one relationship between latent and observed
-#'   outcomes (i.e. they are collinear). Nonzero off-diagonal elements in
-#'   \code{theta_zy} introduce some correlation between the observed outcomes by
-#'   construction from linear combinations implicating common latent outcomes.
-#'   This argument is only used if \code{eta} is not provided.
-#' @param nu_zy probability for each of the off-diagonal elements in
-#'   \code{theta_zy} to be a 1. If \code{nu_zy=0}, \code{theta_zy} is a diagonal
-#'   matrix. This argument is only used if \code{theta_zy} is not provided.
-#' @param eta optional matrix of coefficients used in the linear combination of
-#'   latent outcomes to generate observed outcomes.
-#' @param eta_set vector defining the range of values from which \code{eta} is
-#'   sampled. This argument is only used if \code{eta} is not provided.
-#' @param ev_xx expected proportion of explained variance by the first Principal
-#'   Component (PC1) of a Principal Component Analysis. This is the largest
-#'   eigenvalue of the correlation (if \code{scale_ev=TRUE}) or covariance (if
-#'   \code{scale_ev=FALSE}) matrix divided by the sum of eigenvalues. If
-#'   \code{ev_xx=NULL} (the default), the constant u is chosen by maximising the
-#'   contrast of the correlation matrix.
+#' @param n number of observations in the simulated dataset. Not used if
+#'   \code{xdata} is provided.
+#' @param pk number of predictor variables. A subset of these variables
+#'   contribute to the outcome definition (see argument \code{nu_xy}). Not used
+#'   if \code{xdata} is provided.
+#' @param xdata optional data matrix for the predictors with variables as
+#'   columns and observations as rows. A subset of these variables contribute to
+#'   the outcome definition (see argument \code{nu_xy}).
+#' @param family type of regression model. Possible values include
+#'   \code{"gaussian"} for continuous outcome(s) or \code{"binomial"} for binary
+#'   outcome(s).
+#' @param q number of outcome variables.
+#' @param theta binary matrix with as many rows as predictors and as many
+#'   columns as outcomes. A nonzero entry on row \eqn{i} and column \eqn{j}
+#'   indicates that predictor \eqn{i} contributes to the definition of outcome
+#'   \eqn{j}.
+#' @param nu_xy vector of length \code{q} with expected proportion of predictors
+#'   contributing to the definition of each of the \code{q} outcomes.
+#' @param beta_abs vector defining the range of nonzero regression coefficients
+#'   in absolute values. If \code{continuous=FALSE}, \code{beta_abs} is the set
+#'   of possible precision values. If \code{continuous=TRUE}, \code{beta_abs} is
+#'   the range of possible precision values. Note that regression coefficients
+#'   are re-scaled if \code{family="binomial"} to ensure that the desired
+#'   concordance statistic can be achieved (see argument \code{ev_xy}) so they
+#'   may not be in this range.
+#' @param beta_sign vector of possible signs for regression coefficients.
+#'   Possible inputs are: \code{1} for positive coefficients, \code{-1} for
+#'   negative coefficients, or \code{c(-1, 1)} for both positive and negative
+#'   coefficients.
+#' @param continuous logical indicating whether to sample regression
+#'   coefficients from a uniform distribution between the minimum and maximum
+#'   values in \code{beta_abs} (if \code{continuous=TRUE}) or from proposed
+#'   values in \code{beta_abs} (if \code{continuous=FALSE}).
+#' @param ev_xy vector of length \code{q} with expected goodness of fit measures
+#'   for each of the \code{q} outcomes. If \code{family="gaussian"}, the vector
+#'   contains expected proportions of variance in each of the \code{q} outcomes
+#'   that can be explained by the predictors. If \code{family="binomial"}, the
+#'   vector contains expected concordance statistics (i.e. area under the ROC
+#'   curve) given the true probabilities.
 #'
-#' @return A list with: \item{xdata}{simulated predictor data.}
-#'   \item{ydata}{simulated outcome data.} \item{proba}{simulated probability of
-#'   belonging to each outcome class. Only used for \code{family="binomial"} or
-#'   \code{family="multinomial"}.} \item{logit_proba}{logit of the simulated
-#'   probability of belonging to each outcome class. Only used for
-#'   \code{family="binomial"} or \code{family="multinomial"}.}
-#'   \item{zdata}{simulated data for orthogonal latent outcomes.}
-#'   \item{beta}{matrix of true beta coefficients used to generate outcomes in
-#'   \code{ydata} from predictors in \code{xdata}.} \item{theta}{binary matrix
-#'   indicating the predictors from \code{xdata} contributing to the definition
-#'   of each of the outcome variables in \code{ydata}.} \item{eta}{matrix of
-#'   coefficients used in the linear combination of latent variables from
-#'   \code{zdata} to define observed outcomes in \code{ydata}.}
-#'   \item{theta_zy}{binary matrix indicating the latent variables from
-#'   \code{zdata} used in the definition of observed outcomes in \code{ydata}.}
-#'   \item{xi}{matrix of true beta coefficients used to generate orthogonal
-#'   latent outcomes in \code{zdata} from predictors in \code{xdata}.}
-#'   \item{theta_xz}{binary matrix indicating the predictors from \code{xdata}
-#'   contributing to the definition of each of the latent outcome variables in
-#'   \code{zdata}.} \item{omega_xz}{precision matrix for variables in
-#'   \code{xdata} and \code{zdata}.} \item{adjacency}{binary matrix encoding the
-#'   conditional independence structure between variables from \code{xdata}
-#'   (\code{var}), \code{zdata} (\code{latent}) and \code{ydata}
-#'   (\code{outcome}).}
-#'
-#' @details For a univariate outcome (\code{length(pk)=1}), the simulation is
-#'   done in four steps where (i) predictors contributing to outcome definition
-#'   are randomly sampled (with probability \code{nu_xz} for a given predictor
-#'   to be picked), (ii) the conditional independence structure between the
-#'   predictors is simulated (with probability \code{nu_within} for a given pair
-#'   of predictors to be correlated, conditionally on all other variables),
-#'   (iii) generation of a precision matrix (inverse covariance matrix) for all
-#'   variables, where nonzero entries correspond to the predictors contributing
-#'   to outcome definition or conditional correlation between the predictors,
-#'   and (iv) data for both predictors and outcome is simulated from a single
-#'   multivariate Normal distribution using the inverse precision matrix as
-#'   covariance matrix.
-#'
-#'   To ensure that the generated precision matrix \eqn{\Omega} is positive
-#'   definite, the diagonal entries are defined as described in
-#'   \code{\link{MakePositiveDefinite}}. The conditional variance of the outcome
-#'   \eqn{\Omega_{YY}} is chosen so that the proportion of variance in the
-#'   outcome that is explained by the predictors is \code{ev_xz}.
-#'
-#'   For a multivariate outcome (\code{length(pk)>1}), we introduce independent
-#'   groups of predictors and orthogonal latent variables (groups are defined in
-#'   \code{pk}). Each latent variable is defined as a function of variables
-#'   belonging to one group of predictors. The precision matrix is defined as
-#'   described above for univariate outcomes. Subject to the re-ordering of its
-#'   rows, this precision matrix is block-diagonal, encoding the independence
-#'   between sets of variables made of (i) the groups of predictors, and (ii)
-#'   their corresponding latent variable. The outcome variables are then
-#'   constructed from a linear combination of the latent variables, allowing for
-#'   contributing predictors belonging to different groups.
-#'
-#'   The use of latent variables in the multivariate case ensures that we can
-#'   control the proportion of variance in the latent variable explained by the
-#'   predictors (\code{ev_xz}).
+#' @return A list with: \item{xdata}{input or simulated predictor data.}
+#'   \item{ydata}{simulated outcome data.} \item{beta}{matrix of true beta
+#'   coefficients used to generate outcomes in \code{ydata} from predictors in
+#'   \code{xdata}.} \item{theta}{binary matrix indicating the predictors from
+#'   \code{xdata} contributing to the definition of each of the outcome
+#'   variables in \code{ydata}.}
 #'
 #' @family simulation functions
 #'
 #' @references \insertRef{ourstabilityselection}{fake}
 #'
 #' @examples
-#' oldpar <- par(no.readonly = TRUE)
-#' par(mar = c(5, 5, 5, 5))
+#' \donttest{
+#' ## Independent predictors
 #'
-#' ## Continuous outcomes
-#'
-#' # Univariate outcome
+#' # Univariate continuous outcome
 #' set.seed(1)
 #' simul <- SimulateRegression(pk = 15)
-#' print(simul)
-#' plot(simul)
+#' summary(simul)
 #'
-#' # Multivariate outcome
+#' # Univariate binary outcome
 #' set.seed(1)
-#' simul <- SimulateRegression(pk = c(5, 7, 3))
-#' print(simul)
-#' plot(simul)
+#' simul <- SimulateRegression(pk = 15, family = "binomial")
+#' table(simul$ydata)
 #'
-#' # Independent predictors
+#' # Multiple continuous outcomes
 #' set.seed(1)
-#' simul <- SimulateRegression(pk = c(5, 3), nu_within = 0)
-#' print(simul)
-#' plot(simul)
+#' simul <- SimulateRegression(pk = 15, q = 3)
+#' summary(simul)
 #'
-#' # Blocks of strongly inter-connected predictors
+#'
+#' ## Blocks of correlated predictors
+#'
+#' # Simulation of predictor data
+#' set.seed(1)
+#' xsimul <- SimulateGraphical(pk = rep(5, 3), nu_within = 0.8, nu_between = 0, v_sign = -1)
+#' Heatmap(cor(xsimul$data),
+#'   legend_range = c(-1, 1),
+#'   col = c("navy", "white", "darkred")
+#' )
+#'
+#' # Simulation of outcome data
+#' simul <- SimulateRegression(xdata = xsimul$data)
+#' print(simul)
+#' summary(simul)
+#'
+#'
+#' ## Choosing expected proportion of explained variance
+#'
+#' # Data simulation
+#' set.seed(1)
+#' simul <- SimulateRegression(n = 1000, pk = 15, q = 3, ev_xy = c(0.9, 0.5, 0.2))
+#' summary(simul)
+#'
+#' # Comparing with estimated proportion of explained variance
+#' summary(lm(simul$ydata[, 1] ~ simul$xdata))
+#' summary(lm(simul$ydata[, 2] ~ simul$xdata))
+#' summary(lm(simul$ydata[, 3] ~ simul$xdata))
+#'
+#'
+#' ## Choosing expected concordance (AUC)
+#'
+#' # Data simulation
 #' set.seed(1)
 #' simul <- SimulateRegression(
-#'   pk = c(5, 5), nu_within = 0.5,
-#'   v_within = c(0.5, 1), v_sign = -1, continuous = TRUE, pd_strategy = "min_eigenvalue"
+#'   n = 500, pk = 10,
+#'   family = "binomial", ev_xy = 0.9
 #' )
-#' print(simul)
-#' Heatmap(
-#'   mat = cor(simul$xdata),
-#'   col = c("navy", "white", "red"),
-#'   legend_range = c(-1, 1)
-#' )
-#' plot(simul)
 #'
-#'
-#' ## Categorical outcomes
-#'
-#' # Binary outcome
-#' set.seed(1)
-#' simul <- SimulateRegression(pk = 20, family = "binomial")
-#' print(simul)
-#' table(simul$ydata[, 1])
-#'
-#' # Categorical outcome
-#' set.seed(1)
-#' simul <- SimulateRegression(pk = 20, family = "multinomial")
-#' print(simul)
-#' apply(simul$ydata, 2, sum)
-#'
-#' par(oldpar)
+#' # Comparing with estimated concordance
+#' fitted <- glm(simul$ydata ~ simul$xdata,
+#'   family = "binomial"
+#' )$fitted.values
+#' Concordance(observed = simul$ydata, predicted = fitted)
+#' }
 #' @export
-SimulateRegression <- function(n = 100, pk = 10, N = 3,
-                               family = "gaussian", ev_xz = 0.8,
-                               adjacency_x = NULL, nu_within = 0.1,
-                               theta_xz = NULL, nu_xz = 0.2,
-                               theta_zy = NULL, nu_zy = 0.5,
-                               eta = NULL, eta_set = c(-1, 1),
-                               v_within = c(0.5, 1), v_sign = c(-1, 1), continuous = TRUE,
-                               pd_strategy = "diagonally_dominant", ev_xx = NULL, scale_ev = TRUE,
-                               u_list = c(1e-10, 1), tol = .Machine$double.eps^0.25) {
-  # Checking the inputs
-  if ((length(pk) > 1) & (family == "multinomial")) {
-    stop("The simulation of multiple categorical outcomes is not possible with the current implementation.")
+SimulateRegression <- function(n = 100, pk = 10, xdata = NULL,
+                               family = "gaussian", q = 1,
+                               theta = NULL, nu_xy = 0.2,
+                               beta_abs = c(0.1, 1), beta_sign = c(-1, 1), continuous = TRUE,
+                               ev_xy = 0.7) {
+  # TODO in future versions: introduce more families ("multinomial" and "cox")
+  # Checking that either n and pk or xdata are provided
+  if (is.null(xdata)) {
+    if (is.null(pk) | is.null(n)) {
+      stop("Argument 'xdata' must be provided if 'pk' and 'n' are not provided.")
+    }
   }
 
-  # Definition of the number of latent outcome variables
-  q <- length(pk)
-  p <- sum(pk)
-  if (length(nu_xz) != q) {
-    nu_xz <- rep(nu_xz[1], q)
+  # Checking other inputs
+  if (length(ev_xy) != q) {
+    ev_xy <- rep(ev_xy[1], q)
   }
-  if (length(ev_xz) != q) {
-    ev_xz <- rep(ev_xz[1], q)
+  if (length(nu_xy) != q) {
+    nu_xy <- rep(nu_xy[1], q)
   }
 
-  # Checking the values of ev_xz
-  if (any(ev_xz <= 0) | any(ev_xz >= 1)) {
-    stop("Invalid input for argument 'ev_xz'. Please provide values strictly between 0 and 1.")
+  # Creating objects not provided as input
+  if (!is.null(xdata)) {
+    n <- nrow(xdata)
+    p <- ncol(xdata)
+  } else {
+    p <- sum(pk)
+    xsimul <- SimulateGraphical(
+      n = n, pk = pk, theta = NULL,
+      implementation = HugeAdjacency, topology = "random",
+      nu_within = 0, nu_between = 0, nu_mat = NULL,
+      v_within = 0, v_between = 0,
+      v_sign = c(-1, 1), continuous = TRUE,
+      pd_strategy = "diagonally_dominant", ev_xx = NULL, scale_ev = TRUE,
+      u_list = c(1e-10, 1), tol = .Machine$double.eps^0.25,
+      scale = TRUE, output_matrices = FALSE
+    )
+    xdata <- xsimul$data
   }
 
-  # Simulation of the conditional independence structure with independent blocks
-  if (is.null(adjacency_x)) {
-    adjacency_x <- SimulateAdjacency(
-      pk = pk, nu_between = 0, nu_within = nu_within,
-      implementation = HugeAdjacency,
-      topology = "random"
+  # Checking theta if provided
+  if (!is.null(theta)) {
+    if (q == 1) {
+      if (is.vector(theta)) {
+        theta <- cbind(theta)
+      }
+    }
+    if (ncol(theta) != q) {
+      stop("Arguments 'theta' and 'q' are not compatible. Please provide a matrix 'theta' with 'q' columns.")
+    }
+    if (nrow(theta) != p) {
+      stop("Please provide a matrix 'theta' with as many columns as predictors.")
+    }
+    theta <- ifelse(theta != 0, yes = 1, no = 0)
+  }
+
+  # Sampling true predictors
+  if (is.null(theta)) {
+    theta <- SamplePredictors(pk = p, q = q, nu = nu_xy, orthogonal = FALSE)
+  }
+
+  # Sampling regression coefficients
+  beta <- theta
+  if (continuous) {
+    beta <- beta * matrix(stats::runif(n = nrow(beta) * ncol(beta), min = min(beta_abs), max = max(beta_abs)),
+      nrow = nrow(beta), ncol = ncol(beta)
+    )
+  } else {
+    beta <- beta * matrix(base::sample(beta_abs, size = nrow(beta) * ncol(beta), replace = TRUE),
+      nrow = nrow(beta), ncol = ncol(beta)
     )
   }
-
-  # Simulation of the binary contribution status of predictors for latent outcome variables
-  if (is.null(theta_xz)) {
-    theta_xz <- SamplePredictors(pk = pk, q = q, nu = nu_xz, orthogonal = TRUE)
-  }
-
-  # Using the same support for all categories (multinomial only)
-  if (family == "multinomial") {
-    theta_xz <- matrix(rep(theta_xz, N), ncol = N)
-    q <- N
-    ev_xz <- rep(ev_xz, N)
-  }
-
-  # Setting row and column names
-  colnames(theta_xz) <- paste0("latent", 1:ncol(theta_xz))
-  rownames(theta_xz) <- paste0("var", 1:nrow(theta_xz))
-
-  # Simulation of precision matrix for both predictors and latent outcomes
-  big_theta <- cbind(
-    rbind(matrix(0, nrow = q, ncol = q), theta_xz),
-    rbind(t(theta_xz), adjacency_x)
+  beta <- beta * matrix(base::sample(beta_sign, size = nrow(beta) * ncol(beta), replace = TRUE),
+    nrow = nrow(beta), ncol = ncol(beta)
   )
-  rownames(big_theta) <- colnames(big_theta)
-  out <- SimulatePrecision(
-    theta = big_theta, v_within = v_within,
-    v_sign = v_sign, continuous = continuous,
-    pd_strategy = pd_strategy, ev_xx = ev_xx, scale = scale_ev, u_list = u_list, tol = tol
-  )
-  omega <- out$omega
 
-  # Setting diagonal precision for latent outcomes to reach expected proportion of explained variance
-  for (j in 1:q) {
-    pred_ids <- seq(q + 1, q + p)
-    omega[j, j] <- omega[j, pred_ids, drop = FALSE] %*% solve(omega[pred_ids, pred_ids]) %*% t(omega[j, pred_ids, drop = FALSE]) * 1 / ev_xz[j]
-  }
-
-  # Checking positive definiteness (mostly for multinomial?)
-  eig <- eigen(omega, only.values = TRUE)$values
-  if (any(eig <= 0)) {
-    message("The requested proportion of explained variance could not be achieved.")
-    ev_xz <- stats::optimise(TuneExplainedVarianceReg, interval = c(0, min(ev_xz)), omega = omega, q = q, p = p)$minimum
-    ev_xz <- rep(ev_xz, q)
+  # Sampling outcome data
+  ydata <- matrix(NA, ncol = q, nrow = nrow(xdata))
+  if (family == "gaussian") {
     for (j in 1:q) {
-      pred_ids <- seq(q + 1, q + p)
-      omega[j, j] <- omega[j, pred_ids, drop = FALSE] %*% solve(omega[pred_ids, pred_ids]) %*% t(omega[j, pred_ids, drop = FALSE]) * 1 / ev_xz[j]
+      # Linear combination
+      ypred <- xdata %*% beta[, j]
+
+      # Calculating standard deviation that achieves desired proportion of explained variance
+      sigma <- sqrt((1 - ev_xy[j]) / ev_xy[j] * stats::var(ypred)) # using var(ypred) is a shortcut (could use true variances but not always available)
+
+      # Sampling from Normal distribution
+      ydata[, j] <- stats::rnorm(n = n, mean = ypred, sd = sigma)
     }
   }
-
-  # Computing the covariance matrix
-  sigma <- solve(omega)
-
-  # Computing the regression coefficients from X to Z
-  xi <- solve(sigma[grep("var", colnames(omega)), grep("var", colnames(omega))]) %*% sigma[grep("var", colnames(sigma)), grep("latent", colnames(sigma))]
-  colnames(xi) <- colnames(theta_xz)
-
-  # Simulation of data from multivariate normal distribution
-  x <- MASS::mvrnorm(n, rep(0, p + q), sigma)
-  rownames(x) <- paste0("obs", 1:nrow(x))
-
-  # Separating predictors from latent outcome variables
-  xdata <- x[, grep("var", colnames(x)), drop = FALSE]
-  zdata <- x[, grep("latent", colnames(x)), drop = FALSE]
-
-  # Simulation of eta coefficients to get observed outcomes from latent outcomes
-  if (is.null(eta)) {
-    if (family == "multinomial") {
-      # Variables in Z and Y are the same for multinomial as restricted to one categorical outcome
-      theta_zy <- eta <- diag(N)
-    } else {
-      if (is.null(theta_zy)) {
-        theta_zy <- SamplePredictors(pk = q, q = q, nu = nu_zy, orthogonal = FALSE)
-      }
-      eta <- matrix(stats::runif(q * q, min = min(eta_set), max = max(eta_set)),
-        ncol = q, nrow = q
-      )
-      eta <- eta * theta_zy
-    }
-  } else {
-    theta_zy <- ifelse(eta != 0, yes = 1, no = 0)
-  }
-  rownames(eta) <- rownames(theta_zy) <- paste0("latent", 1:q)
-  colnames(eta) <- colnames(theta_zy) <- paste0("outcome", 1:q)
-  ydata <- zdata %*% eta
-
-  # Computing the xy coefficients and binary contribution status
-  beta <- xi %*% eta
-  beta <- base::zapsmall(beta)
-  theta <- ifelse(beta != 0, yes = 1, no = 0)
-
-  # Compute binary outcome for logistic regression
   if (family == "binomial") {
-    # Variability is coming from binomial distribution for logistic
-    ydata <- xdata %*% beta
-
-    # Sampling from (series of) binomial distributions
-    proba <- matrix(NA, nrow = n, ncol = q)
     for (j in 1:q) {
-      proba[, j] <- 1 / (1 + exp(-ydata[, j])) # inverse logit
-    }
+      # Linear combination
+      crude_log_odds <- xdata %*% beta[, j]
 
-    ydata_cat <- matrix(0, nrow = n, ncol = q)
-    for (j in 1:q) {
-      for (i in 1:n) {
-        ydata_cat[i, j] <- stats::rbinom(n = 1, size = 1, prob = proba[i, j])
-      }
-    }
+      # Identifying a relevant range of scaling factors (logistic distribution)
+      s_max <- max(abs(crude_log_odds)) / log(0.51 / 0.49) # scale that gives all probabilities between 0.49 and 0.51 (expected c stat close to 0.5)
+      s_min <- min(abs(crude_log_odds)) / log(0.99 / 0.01) # scale that gives all probabilities above 0.99 or below 0.01 (expected c stat close to 1)
 
-    # Setting row and column names
-    rownames(ydata_cat) <- rownames(proba) <- rownames(ydata)
-    colnames(ydata_cat) <- colnames(proba) <- colnames(ydata)
-  }
-
-  if (family == "multinomial") {
-    # Variability is coming from multinomial distribution for logistic
-    ydata <- xdata %*% beta
-
-    proba <- matrix(NA, nrow = n, ncol = q)
-    for (j in 1:q) {
-      proba[, j] <- 1 / (1 + exp(-ydata[, j])) # inverse logit
-    }
-
-    # Sampling from multinomial distribution
-    ydata_cat <- matrix(0, nrow = n, ncol = q)
-    for (i in 1:n) {
-      ydata_cat[i, ] <- stats::rmultinom(n = 1, size = 1, prob = proba[i, ])[, 1]
-    }
-
-    # Setting row and column names
-    rownames(ydata_cat) <- rownames(proba) <- rownames(ydata)
-    colnames(ydata_cat) <- colnames(proba) <- colnames(ydata)
-  }
-
-  # Extracting the conditional independence structure between x, z and y
-  adjacency <- rbind(
-    cbind(matrix(0, nrow = q, ncol = q), t(theta_zy), matrix(0, nrow = q, ncol = p)),
-    cbind(rbind(theta_zy, matrix(0, nrow = p, ncol = q)), big_theta)
-  )
-  rownames(adjacency) <- colnames(adjacency) <- c(colnames(theta_zy), rownames(big_theta))
-
-  # Return the simulated X and Y
-  if (family %in% c("binomial", "multinomial")) {
-    if (family == "binomial") {
-      out <- list(
-        xdata = xdata, ydata = ydata_cat,
-        proba = proba, logit_proba = ydata,
-        zdata = zdata,
-        beta = beta, theta = theta,
-        eta = eta, theta_zy = theta_zy,
-        xi = xi, theta_xz = theta_xz,
-        ev_xz = ev_xz,
-        omega_xz = omega,
-        adjacency = adjacency
+      # Finding scaling factor that gives desired AUC (interval required to ensure optimisation works)
+      argmax_scaling_factor <- stats::optimise(
+        f = TuneCStatisticLogit,
+        crude_log_odds = crude_log_odds,
+        auc = ev_xy[j],
+        lower = 1 / s_max, upper = 1 / s_min
       )
+      scaling_factor <- argmax_scaling_factor$minimum
+
+      # Applying scaling factor
+      beta[, j] <- beta[, j] * scaling_factor
+      log_odds <- crude_log_odds * scaling_factor
+
+      # Calculating probabilities from log-odds (inverse logit)
+      proba <- 1 / (1 + exp(-log_odds))
+
+      # Sampling from Bernouilli distribution
+      ydata[, j] <- stats::rbinom(n = n, size = 1, prob = proba)
     }
-    if (family == "multinomial") {
-      out <- list(
-        xdata = xdata, ydata = ydata_cat,
-        proba = proba, logit_proba = ydata,
-        zdata = zdata,
-        beta = beta, theta = theta,
-        theta_zy = theta_zy,
-        xi = xi, theta_xz = theta_xz,
-        ev_xz = ev_xz,
-        omega_xz = omega,
-        adjacency = adjacency
-      )
-    }
-  } else {
-    out <- list(
-      xdata = xdata, ydata = ydata, zdata = zdata,
-      beta = beta, theta = theta,
-      eta = eta, theta_zy = theta_zy,
-      xi = xi, theta_xz = theta_xz,
-      ev_xz = ev_xz,
-      omega_xz = omega,
-      adjacency = adjacency
-    )
   }
+
+  # Defining row and column names of ydata
+  rownames(ydata) <- rownames(xdata)
+  colnames(ydata) <- paste0("outcome", 1:q)
+
+  # Defining row and column names of beta and theta
+  rownames(beta) <- rownames(theta) <- colnames(xdata)
+  colnames(beta) <- colnames(theta) <- colnames(ydata)
+
+  # Preparing the output
+  out <- list(xdata = xdata, ydata = ydata, beta = beta, theta = theta)
 
   # Defining the class
   class(out) <- "simulation_regression"
+
+  return(out)
+}
+
+
+#' Simulation of data with underlying clusters
+#'
+#' Simulates mixture multivariate Normal data with clusters of items (rows)
+#' sharing similar profiles along (a subset of) attributes (columns).
+#'
+#' @param n vector of the number of items per cluster in the simulated data. The
+#'   total number of items is \code{sum(n)}.
+#' @param pk vector of the number of attributes in the simulated data.
+#' @param sigma optional within-cluster correlation matrix.
+#' @param theta_xc optional binary matrix encoding which attributes (columns)
+#'   contribute to the clustering structure between which clusters (rows). If
+#'   \code{theta_xc=NULL}, variables contributing to the clustering are sampled
+#'   with probability \code{nu_xc}.
+#' @param nu_xc expected proportion of variables contributing to the clustering
+#'   over the total number of variables. Only used if \code{theta_xc} is not
+#'   provided.
+#' @param ev_xc vector of expected proportion of variance in each of the
+#'   contributing attributes that can be explained by the clustering.
+#' @param output_matrices logical indicating if the cluster and attribute
+#'   specific means and cluster specific covariance matrix should be included
+#'   in the output.
+#'
+#' @details The data is simulated from a Gaussian mixture where for all \eqn{i
+#'   \in {1, \dots, n}}:
+#'
+#'   \eqn{Z_i i.i.d. ~ M(1, \kappa)}
+#'
+#'   \eqn{X_i | Z_i indep. ~ N_p(\mu_{Z_i}, \Sigma)}
+#'
+#'   where \eqn{M(1, \kappa)} is the multinomial distribution with parameters 1
+#'   and \eqn{\kappa}, the vector of length \eqn{G} (the number of clusters)
+#'   with probabilities of belonging to each of the clusters, and
+#'   \eqn{N_p(\mu_{Z_i}, \Sigma)} is the multivariate Normal distribution with a
+#'   mean vector \eqn{\mu_{Z_i}} that depends on the cluster membership encoded
+#'   in \eqn{Z_i} and the same covariance matrix \eqn{\Sigma} within all \eqn{G}
+#'   clusters.
+#'
+#'   The mean vectors \eqn{\mu_{g}, g \in {1, \dots G}} are simulated so that
+#'   the desired proportion of variance in each of attributes explained by the
+#'   clustering (argument \code{ev_xc}) is reached.
+#'
+#'   The covariance matrix \eqn{\Sigma} is obtained by re-scaling a correlation
+#'   matrix (argument \code{sigma}) to ensure that the desired proportions of
+#'   explained variances by the clustering (argument \code{ev_xc}) are reached.
+#'
+#' @seealso \code{\link{MakePositiveDefinite}}
+#' @family simulation functions
+#'
+#' @return A list with: \item{data}{simulated data with \code{sum(n)}
+#'   observation and \code{sum(pk)} variables} \item{theta}{simulated (true)
+#'   cluster membership.} \item{theta_xc}{binary vector encoding variables
+#'   contributing to the clustering structure.} \item{ev}{vector of marginal
+#'   expected proportions of explained variance for each variable.}
+#'   \item{mu_mixture}{simulated (true) cluster-specific means. Only returned if
+#'   \code{output_matrices=TRUE}.} \item{sigma}{simulated (true) covariance
+#'   matrix. Only returned if \code{output_matrices=TRUE}.}
+#'
+#' @examples
+#' oldpar <- par(no.readonly = TRUE)
+#' par(mar = rep(7, 4))
+#'
+#' ## Example with 3 clusters
+#'
+#' # Data simulation
+#' set.seed(1)
+#' simul <- SimulateClustering(
+#'   n = c(10, 30, 15),
+#'   nu_xc = 1,
+#'   ev_xc = 0.5
+#' )
+#' print(simul)
+#' plot(simul)
+#'
+#' # Checking the proportion of explained variance
+#' x <- simul$data[, 1]
+#' z <- as.factor(simul$theta)
+#' summary(lm(x ~ z)) # R-squared
+#'
+#'
+#' ## Example with 2 variables contributing to clustering
+#'
+#' # Data simulation
+#' set.seed(1)
+#' simul <- SimulateClustering(
+#'   n = c(20, 10, 15), pk = 10,
+#'   theta_xc = c(1, 1, rep(0, 8)),
+#'   ev_xc = 0.8
+#' )
+#' print(simul)
+#' plot(simul)
+#'
+#' # Visualisation of the data
+#' Heatmap(
+#'   mat = simul$data,
+#'   col = c("navy", "white", "red")
+#' )
+#' simul$ev # marginal proportions of explained variance
+#'
+#' # Visualisation along contributing variables
+#' plot(simul$data[, 1:2], col = simul$theta, pch = 19)
+#'
+#'
+#' ## Example with different levels of separation
+#'
+#' # Data simulation
+#' set.seed(1)
+#' simul <- SimulateClustering(
+#'   n = c(20, 10, 15), pk = 10,
+#'   theta_xc = c(1, 1, rep(0, 8)),
+#'   ev_xc = c(0.99, 0.5, rep(0, 8))
+#' )
+#'
+#' # Visualisation along contributing variables
+#' plot(simul$data[, 1:2], col = simul$theta, pch = 19)
+#'
+#'
+#' ## Example with correlated contributors
+#'
+#' # Data simulation
+#' pk <- 10
+#' adjacency <- matrix(0, pk, pk)
+#' adjacency[1, 2] <- adjacency[2, 1] <- 1
+#' set.seed(1)
+#' sigma <- SimulateCorrelation(
+#'   pk = pk,
+#'   theta = adjacency,
+#'   pd_strategy = "min_eigenvalue",
+#'   v_within = 0.6, v_sign = -1
+#' )$sigma
+#' simul <- SimulateClustering(
+#'   n = c(200, 100, 150), pk = pk, sigma = sigma,
+#'   theta_xc = c(1, 1, rep(0, 8)),
+#'   ev_xc = c(0.9, 0.8, rep(0, 8))
+#' )
+#'
+#' # Visualisation along contributing variables
+#' plot(simul$data[, 1:2], col = simul$theta, pch = 19)
+#'
+#' # Checking marginal proportions of explained variance
+#' mymodel <- lm(simul$data[, 1] ~ as.factor(simul$theta))
+#' summary(mymodel)$r.squared
+#' mymodel <- lm(simul$data[, 2] ~ as.factor(simul$theta))
+#' summary(mymodel)$r.squared
+#'
+#' par(oldpar)
+#'
+#' @export
+SimulateClustering <- function(n = c(10, 10), pk = 10, sigma = NULL,
+                               theta_xc = NULL, nu_xc = 1, ev_xc = 0.5,
+                               output_matrices = FALSE) {
+  # Checking the inputs
+  if (!is.null(theta_xc)) {
+    if (inherits(theta_xc, "numeric")) {
+      theta_xc <- rbind(theta_xc)
+    }
+    if (nrow(theta_xc) == 1) {
+      tmp_theta_xc <- theta_xc
+      theta_xc <- NULL
+      for (i in 1:length(n)) {
+        theta_xc <- rbind(theta_xc, tmp_theta_xc)
+      }
+    }
+    if (is.null(pk)) {
+      pk <- ncol(theta_xc)
+    } else {
+      if (sum(pk) != ncol(theta_xc)) {
+        # warning("Arguments 'pk' and 'theta_xc' are not compatible. Argument 'pk' has been set to ncol('theta_xc').")
+        pk <- ncol(theta_xc)
+      }
+    }
+  }
+
+  # Using identity matrix if correlation is not provided
+  out <- list()
+  if (is.null(sigma)) {
+    sigma <- diag(sum(pk))
+  }
+  rownames(sigma) <- colnames(sigma) <- paste0("var", 1:ncol(sigma))
+
+  # Simulating data from multivariate normal distribution
+  x <- MASS::mvrnorm(sum(n), rep(0, sum(pk)), sigma)
+  colnames(x) <- paste0("var", 1:ncol(x))
+  rownames(x) <- paste0("obs", 1:nrow(x))
+  out$data <- x
+
+  # Defining number of clusters
+  nc <- length(n)
+
+  # Defining variables contributing to the clustering
+  if (is.null(theta_xc)) {
+    theta_xc <- matrix(rep(
+      SamplePredictors(pk = sum(pk), q = 1, nu = nu_xc, orthogonal = TRUE)[, 1],
+      length(n)
+    ),
+    nrow = length(n), byrow = TRUE
+    )
+  }
+  rownames(theta_xc) <- paste0("cluster", 1:nrow(theta_xc))
+
+  # Simulating marginal proportions of explained variance
+  if (is.null(ev_xc)) {
+    ev_xc <- stats::runif(n = sum(pk))
+  } else {
+    if (length(ev_xc) == 1) {
+      ev_xc <- rep(ev_xc, sum(pk))
+    }
+  }
+
+  # Definition of membership
+  theta <- NULL
+  for (i in 1:length(n)) {
+    theta <- c(theta, rep(i, each = n[i]))
+  }
+  names(theta) <- rownames(out$data)
+  out$theta <- theta
+
+  # Simulating the cluster-specific means
+  mu_mixture <- matrix(NA, nrow = length(unique(theta)), ncol = sum(pk))
+  if (length(n) > 1) {
+    mu_mat <- matrix(NA, nrow = sum(n), ncol = sum(pk))
+    for (k in 1:ncol(mu_mat)) {
+      # Sampling initial values for cluster-specific means
+      mu <- stats::rnorm(n = nc, mean = 0, sd = 1)
+      mu <- mu * theta_xc[, k]
+
+      # Attributing cluster-specific means to observations
+      for (i in 1:nrow(mu_mat)) {
+        mu_mat[i, k] <- mu[theta[i]]
+      }
+
+      # # Defining variance to reach expected proportion of e.v.
+      # var_mu <- ev_xc[k] * 1 / (1 - ev_xc[k])
+      #
+      # # Scaling to ensure mean of zero and defined variance
+      # mu_mat[, k] <- scale(mu_mat[, k])
+      # mu_mat[, k] <- mu_mat[, k] * sqrt(var_mu)
+      # # Equivalent to: sqrt(var_mu)*(mu_mat[, k]-mean(mu_mat[,k]))/sqrt(1/(nrow(mu_mat)-1)*sum((mu_mat[, k]-mean(mu_mat[, k]))^2))
+      # # Equivalent to: sqrt(var_mu)*(mu_mat[, k]-1/nrow(mu_mat)*sum(table(theta)*mu))/sqrt(1/(nrow(mu_mat)-1)*sum((mu_mat[, k]-mean(mu_mat[, k]))^2))
+      # # Equivalent to: sqrt(var_mu)*(mu_mat[, k]-1/nrow(mu_mat)*sum(table(theta)*mu))/sqrt(1/(nrow(mu_mat)-1)*sum(table(theta)*(mu-1/nrow(mu_mat)*sum(table(theta)*mu))^2))
+      #
+      # # Storing cluster-specific means
+      # mu_mixture[, k] <- mu_mat[!duplicated(theta), k]
+      #
+      # # Adding cluster-specific means
+      # out$data[, k] <- out$data[, k] + mu_mat[, k]
+
+      # Ensuring that the grouping structure is going to represent desired proportion of variance
+      if (any(theta_xc[, k] != 0)) {
+        mu_mat[, k] <- scale(mu_mat[, k]) * sqrt(ev_xc[k]) * sqrt(diag(sigma)[k])
+        out$data[, k] <- out$data[, k] * sqrt(1 - ev_xc[k])
+      }
+
+      # Adding cluster-specific means
+      out$data[, k] <- out$data[, k] + mu_mat[, k]
+
+      # Storing cluster-specific means
+      mu_mixture[, k] <- mu_mat[!duplicated(theta), k]
+    }
+    mu_mat[is.na(mu_mat)] <- 0
+  }
+
+  # Updating the within-cluster covariance matrix
+  sigma <- sigma * sqrt(cbind(1 - ev_xc) %*% rbind(1 - ev_xc))
+
+  # Definition of contributing variables
+  colnames(theta_xc) <- colnames(out$data)
+  out$theta_xc <- theta_xc
+  out$ev <- ev_xc * ifelse(apply(theta_xc, 2, sum) != 0, yes = 1, no = 0)
+
+  # Returning true cluster-specific means
+  if (output_matrices) {
+    out$mu_mixture <- mu_mixture
+    out$sigma <- sigma
+  }
+
+  # Defining the class
+  class(out) <- "simulation_clustering"
 
   return(out)
 }
@@ -859,7 +1143,9 @@ SimulateAdjacency <- function(pk = 10,
                               implementation = HugeAdjacency,
                               topology = "random",
                               nu_within = 0.1,
-                              nu_between = 0, ...) {
+                              nu_between = 0,
+                              nu_mat = NULL,
+                              ...) {
   # Storing all arguments
   args <- c(mget(ls()), list(...))
 
@@ -871,6 +1157,17 @@ SimulateAdjacency <- function(pk = 10,
     }
   }
 
+  # Creating the matrix of probabilities
+  if (is.null(nu_mat)) {
+    nu_mat <- diag(length(pk)) * nu_within
+    nu_mat[upper.tri(nu_mat)] <- nu_between
+    nu_mat[lower.tri(nu_mat)] <- nu_between
+  } else {
+    if ((ncol(nu_mat) != length(pk)) & (nrow(nu_mat) != length(pk))) {
+      stop("Arguments 'pk' and 'nu_mat' are not compatible. They correspond to different numbers of communities. The number of rows and columns in 'nu_mat' must be equal to the length of the vector 'pk'.")
+    }
+  }
+
   # Creating matrix with block indices
   bigblocks <- BlockMatrix(pk)
   bigblocks_vect <- bigblocks[upper.tri(bigblocks)]
@@ -878,6 +1175,9 @@ SimulateAdjacency <- function(pk = 10,
   # Making as factor to allow for groups with 1 variable (for clustering)
   bigblocks_vect <- factor(bigblocks_vect, levels = seq(1, max(bigblocks)))
   block_ids <- unique(as.vector(bigblocks))
+
+  # Creating matrix with block structure
+  blocks <- BlockStructure(pk)
 
   # Identifying relevant arguments
   if (!"..." %in% names(formals(implementation))) {
@@ -892,19 +1192,25 @@ SimulateAdjacency <- function(pk = 10,
       theta <- matrix(0, nrow = sum(pk), ncol = sum(pk))
       theta_vect <- theta[upper.tri(theta)]
 
-      # Allowing for different densities in within and between blocks
-      theta_w <- do.call(implementation, args = c(args, list(nu = nu_within)))
-      theta_w_vect <- theta_w[upper.tri(theta_w)]
-      theta_b <- do.call(implementation, args = c(args, list(nu = nu_between)))
-      theta_b_vect <- theta_b[upper.tri(theta_b)]
+      # # Allowing for different densities in within and between blocks
+      # theta_w <- do.call(implementation, args = c(args, list(nu = nu_within)))
+      # theta_w_vect <- theta_w[upper.tri(theta_w)]
+      # theta_b <- do.call(implementation, args = c(args, list(nu = nu_between)))
+      # theta_b_vect <- theta_b[upper.tri(theta_b)]
 
       # Filling within and between blocks
       for (k in block_ids) {
-        if (k %in% unique(diag(bigblocks))) {
-          theta_vect[bigblocks_vect == k] <- theta_w_vect[bigblocks_vect == k]
-        } else {
-          theta_vect[bigblocks_vect == k] <- theta_b_vect[bigblocks_vect == k]
-        }
+        tmpids <- which(blocks == k, arr.ind = TRUE)
+        i <- tmpids[1]
+        j <- tmpids[2]
+        theta_w <- do.call(implementation, args = c(args, list(nu = nu_mat[i, j])))
+        theta_w_vect <- theta_w[upper.tri(theta_w)]
+        theta_vect[bigblocks_vect == k] <- theta_w_vect[bigblocks_vect == k]
+        # if (k %in% unique(diag(bigblocks))) {
+        #   theta_vect[bigblocks_vect == k] <- theta_w_vect[bigblocks_vect == k]
+        # } else {
+        #   theta_vect[bigblocks_vect == k] <- theta_b_vect[bigblocks_vect == k]
+        # }
       }
       theta[upper.tri(theta)] <- theta_vect
       theta <- theta + t(theta)
@@ -970,4 +1276,121 @@ HugeAdjacency <- function(pk = 10, topology = "random", nu = 0.1, ...) {
   theta <- theta[ids, ids]
 
   return(theta)
+}
+
+
+
+
+#' Simulation of precision matrix
+#'
+#' Simulates a sparse precision matrix from a binary adjacency matrix
+#' \code{theta} encoding conditional independence in a Gaussian Graphical Model.
+#'
+#' @inheritParams SimulateGraphical
+#' @param theta binary and symmetric adjacency matrix encoding the conditional
+#'   independence structure.
+#' @param scale logical indicating if the proportion of explained variance by
+#'   PC1 should be computed from the correlation (\code{scale=TRUE}) or
+#'   covariance (\code{scale=FALSE}) matrix.
+#'
+#' @return A list with: \item{omega}{true simulated precision matrix.}
+#'   \item{u}{value of the constant u used to ensure that \code{omega} is
+#'   positive definite.}
+#'
+#' @seealso \code{\link{SimulateGraphical}}, \code{\link{MakePositiveDefinite}}
+#'
+#' @details Entries that are equal to zero in the adjacency matrix \code{theta}
+#'   are also equal to zero in the generated precision matrix. These zero
+#'   entries indicate conditional independence between the corresponding pair of
+#'   variables (see \code{\link{SimulateGraphical}}).
+#'
+#'   Argument \code{pk} can be specified to create groups of variables and allow
+#'   for nonzero precision entries to be sampled from different distributions
+#'   between two variables belonging to the same group or to different groups.
+#'
+#'   If \code{continuous=FALSE}, nonzero off-diagonal entries of the precision
+#'   matrix are sampled from a discrete uniform distribution taking values in
+#'   \code{v_within} (for entries in the diagonal block) or \code{v_between}
+#'   (for entries in off-diagonal blocks). If \code{continuous=TRUE}, nonzero
+#'   off-diagonal entries are sampled from a continuous uniform distribution
+#'   taking values in the range given by \code{v_within} or \code{v_between}.
+#'
+#'   Diagonal entries of the precision matrix are defined to ensure positive
+#'   definiteness as described in \code{\link{MakePositiveDefinite}}.
+#'
+#' @references \insertRef{ourstabilityselection}{fake}
+#'
+#' @examples
+#' # Simulation of an adjacency matrix
+#' theta <- SimulateAdjacency(pk = c(5, 5), nu_within = 0.7)
+#' print(theta)
+#'
+#' # Simulation of a precision matrix maximising the contrast
+#' simul <- SimulatePrecision(theta = theta)
+#' print(simul$omega)
+#'
+#' # Simulation of a precision matrix with specific ev by PC1
+#' simul <- SimulatePrecision(
+#'   theta = theta,
+#'   pd_strategy = "min_eigenvalue",
+#'   ev_xx = 0.3, scale = TRUE
+#' )
+#' print(simul$omega)
+#' @export
+SimulatePrecision <- function(pk = NULL, theta,
+                              v_within = c(0.5, 1), v_between = c(0, 0.1),
+                              v_sign = c(-1, 1), continuous = TRUE,
+                              pd_strategy = "diagonally_dominant", ev_xx = NULL, scale = TRUE,
+                              u_list = c(1e-10, 1), tol = .Machine$double.eps^0.25) {
+  # Checking inputs and defining pk
+  if (is.null(pk)) {
+    pk <- ncol(theta)
+  } else {
+    if (sum(pk) != ncol(theta)) {
+      stop("Arguments 'pk' and 'theta' are not consistent. The sum of 'pk' entries must be equal to the number of rows and columns in 'theta'.")
+    }
+  }
+
+  # Checking the choice of pd_strategy
+  if (!pd_strategy %in% c("diagonally_dominant", "min_eigenvalue")) {
+    stop("Invalid input for argument 'pd_strategy'. Possible values are: 'diagonally_dominant' or 'min_eigenvalue'.")
+  }
+
+  # Checking other input values
+  if (any((v_within < 0) | (v_within > 1))) {
+    stop("Invalid input for argument 'v_within'. Values must be between 0 and 1.")
+  }
+  if (any((v_between < 0) | (v_between > 1))) {
+    stop("Invalid input for argument 'v_between'. Values must be between 0 and 1.")
+  }
+  if (any(!v_sign %in% c(-1, 1))) {
+    stop("Invalid input for argument 'v_sign'. Possible values are -1 and 1.")
+  }
+
+  # Ensuring that v values are lower than or equal to 1
+  if (any(abs(v_within) > 1)) {
+    v_within <- v_within / max(abs(v_within))
+    message("The values provided in 'v_within' have been re-scaled to be lower than or equal to 1 in absolute value.")
+  }
+
+  # Ensuring that diagonal entries of theta are zero
+  diag(theta) <- 0
+
+  # Building v matrix
+  v <- SimulateSymmetricMatrix(
+    pk = pk, v_within = v_within, v_between = v_between,
+    v_sign = v_sign, continuous = continuous
+  )
+
+  # Filling off-diagonal entries of the precision matrix
+  omega_tilde <- theta * v
+
+  # Ensuring positive definiteness
+  omega_pd <- MakePositiveDefinite(
+    omega = omega_tilde, pd_strategy = pd_strategy,
+    ev_xx = ev_xx, scale = scale, u_list = u_list, tol = tol
+  )
+
+  # Returning the output
+  return(omega_pd)
 }

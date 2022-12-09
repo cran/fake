@@ -1,13 +1,14 @@
+#' @importFrom Rdpack reprompt
 #' @export
 print.simulation_graphical_model <- function(x, ...) {
-  cat(paste0("Multivariate Normal data with underlying structure of a graphical model."))
+  cat(paste0("Data generated from a Gaussian graphical model."))
   cat("\n")
 }
 
 
 #' @export
 print.simulation_clustering <- function(x, ...) {
-  cat(paste0("Multivariate Normal data with underlying clusters of participants along (a subset of) variables."))
+  cat(paste0("Data generated from a Gaussian mixture model."))
   cat("\n")
 }
 
@@ -21,7 +22,7 @@ print.simulation_components <- function(x, ...) {
 
 #' @export
 print.simulation_regression <- function(x, ...) {
-  cat(paste0("Multivariate Normal data with predictors and outcome(s)."))
+  cat(paste0("Two datasets where outcome data is generated conditionally on predictor data."))
   cat("\n")
 }
 
@@ -105,12 +106,14 @@ plot.simulation_graphical_model <- function(x, ...) {
   igraph::E(mygraph)$width <- 0.5
 
   igraph::plot.igraph(mygraph, ...)
+
+  return(invisible(mygraph))
 }
 
 
 #' @export
 plot.adjacency_matrix <- function(x, ...) {
-  mygraph <- igraph::graph_from_adjacency_matrix(x, mode = "undirected")
+  mygraph <- igraph::graph_from_adjacency_matrix(x, mode = ifelse(isSymmetric(x), yes = "undirected", no = "directed"))
 
   # Formatting vertices
   mydegrees <- igraph::degree(mygraph)
@@ -125,7 +128,16 @@ plot.adjacency_matrix <- function(x, ...) {
   igraph::E(mygraph)$color <- "grey60"
   igraph::E(mygraph)$width <- 0.5
 
-  igraph::plot.igraph(mygraph, ...)
+  # Graph layout
+  if (all(x[lower.tri(x)] == 0)) {
+    layout <- igraph::layout_with_sugiyama(mygraph)
+  } else {
+    layout <- igraph::layout_with_fr(mygraph)
+  }
+
+  igraph::plot.igraph(mygraph, layout = layout, ...)
+
+  return(invisible(mygraph))
 }
 
 
@@ -133,8 +145,7 @@ plot.adjacency_matrix <- function(x, ...) {
 plot.simulation_clustering <- function(x, ...) {
   # Visualisation of Euclidian distances along the contributing variable
   Heatmap(
-    mat = as.matrix(stats::dist(x$data[, which(x$theta_xc == 1), drop = FALSE])),
-    col = c("navy", "white", "red")
+    mat = as.matrix(stats::dist(x$data[, which(apply(x$theta_xc, 2, sum) != 0), drop = FALSE]))
   )
   graphics::title("Distances across variables contributing to clustering")
 }
@@ -173,4 +184,84 @@ plot.simulation_regression <- function(x, ...) {
   igraph::E(mygraph)$width <- 0.5
 
   igraph::plot.igraph(mygraph, ...)
+}
+
+
+#' Receiver Operating Characteristic (ROC) curve
+#'
+#' Plots the True Positive Rate (TPR) as a function of the False Positive Rate
+#' (FPR) for different thresholds in predicted probabilities.
+#'
+#' @param x output of \code{\link{ROC}}.
+#' @param add logical indicating if the curve should be added to the current
+#'   plot.
+#' @param ... additional plotting arguments (see \code{\link[graphics]{par}}).
+#'
+#' @return A base plot.
+#'
+#' @seealso \code{\link{ROC}}, \code{\link{Concordance}}
+#'
+#' @examples
+#' \donttest{
+#' # Data simulation
+#' set.seed(1)
+#' simul <- SimulateRegression(
+#'   n = 500, pk = 20,
+#'   family = "binomial", ev_xy = 0.8
+#' )
+#'
+#' # Logistic regression
+#' fitted <- glm(simul$ydata ~ simul$xdata, family = "binomial")$fitted.values
+#'
+#' # Constructing the ROC curve
+#' roc <- ROC(predicted = fitted, observed = simul$ydata)
+#' plot(roc)
+#' }
+#' @export
+plot.roc_curve <- function(x, add = FALSE, ...) {
+  # Storing extra arguments
+  extra_args <- list(...)
+
+  # Defining default parameters if not provided
+  if (!"xlim" %in% names(extra_args)) {
+    extra_args$xlim <- c(0, 1)
+  }
+  if (!"ylim" %in% names(extra_args)) {
+    extra_args$ylim <- c(0, 1)
+  }
+  if (!"lwd" %in% names(extra_args)) {
+    extra_args$lwd <- 2
+  }
+  if (!"xlab" %in% names(extra_args)) {
+    extra_args$xlab <- "False Positive Rate"
+  }
+  if (!"ylab" %in% names(extra_args)) {
+    extra_args$ylab <- "True Positive Rate"
+  }
+  if (!"las" %in% names(extra_args)) {
+    extra_args$las <- 1
+  }
+  if (!"cex.lab" %in% names(extra_args)) {
+    extra_args$cex.lab <- 1.3
+  }
+  if (!"col" %in% names(extra_args)) {
+    extra_args$col <- "red"
+  }
+
+  # Initialising the plot
+  tmp_extra_args <- MatchingArguments(extra_args = extra_args, FUN = plot)
+  if (!add) {
+    do.call(plot, args = c(list(x = NULL), tmp_extra_args))
+    graphics::abline(0, 1, lty = 3)
+  }
+
+  # Adding the point-wise average
+  tmp_extra_args <- MatchingArguments(extra_args = extra_args, FUN = graphics::lines)
+  do.call(graphics::lines, args = c(
+    list(
+      x = apply(x$FPR, 2, stats::median),
+      y = apply(x$TPR, 2, stats::median)
+    ),
+    tmp_extra_args
+  ))
 }
